@@ -1,6 +1,115 @@
 #!/usr/bin/env bash
 
+set -euo pipefail
+
+function install_deps {
+    sudo apt-get update -y
+
+    # Install base dependencies
+
+    sudo apt-get install -y -qq --no-install-recommends \
+      build-essential \
+      htop \
+      net-tools \
+      nano \
+      gcc \
+      g++ \
+      gdb \
+      netcat-traditional \
+      cron \
+      tzdata \
+      xvfb \
+      dbus \
+      tmux \
+      libglib2.0-0 \
+      libpulse0 \
+      libdbus-1-3 \
+      libfontconfig1 \
+      libfreetype6 \
+      libxext6 \
+      libxfixes3 \
+      libxi6 \
+      libxrandr2 \
+      libxrender1 \
+      libxcb1 \
+      libxcb-xfixes0 \
+      libxcb-render0 \
+      libxcomposite1 \
+      libxcursor1 \
+      libxdamage1 \
+      libxinerama1 \
+      libnss3 \
+      libasound2-dev \
+      libx11-xcb1 \
+      x11-xserver-utils \
+      x11-utils \
+      xauth && \
+
+    # Install steam dependencies
+
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+        locales \
+        steamcmd \
+        jq \
+        curl \
+        wget \
+        zip \
+        unzip \
+        sudo \
+        gosu \
+        dos2unix
+
+    rm -rf /var/lib/apt/lists/*
+
+    # Set up SteamCMD symlinks
+    mkdir -p "$HOME/.steam"
+    ln -s "$HOME/.local/share/Steam/steamcmd/linux32" "$HOME/.steam/sdk32"
+    ln -s "$HOME/.local/share/Steam/steamcmd/linux64" "$HOME/.steam/sdk64"
+
+    ln -s "$HOME/.steam/sdk32/steamclient.so" "$HOME/.steam/sdk32/steamservice.so"
+    ln -s "$HOME/.steam/sdk64/steamclient.so" "$HOME/.steam/sdk64/steamservice.so"
+
+
+
+    # Clean up
+    rm -rf /var/lib/apt/lists/*
+
+    # Download Wine repository key
+    wget -O /tmp/winehq.key https://dl.winehq.org/wine-builds/winehq.key
+
+    # Add i386 architecture and update package lists
+    dpkg --add-architecture i386
+    apt-get update
+
+    # Install required packages for repository management
+    apt-get install -y software-properties-common gnupg2
+
+    # Add Wine repository key
+    apt-key add /tmp/winehq.key
+
+    # Add Wine repository
+    apt-add-repository "deb https://dl.winehq.org/wine-builds/ubuntu/ bionic main"
+
+    # Install Wine and related packages
+    apt-get install -y --install-recommends winehq-stable winbind cabextract
+
+    # Clean up
+    rm -rf /var/lib/apt/lists/*
+    rm -f /tmp/winehq.key
+}
+
+
+function check_deps() {
+
+}
+
 # Install
+function install {
+    install_deps
+
+}
+
 
 # Monitor
 
@@ -15,3 +124,5 @@
 # Stop
 
 # Restart
+
+# Main block
