@@ -2,127 +2,164 @@
 
 set -euo pipefail
 
+SERVER_DIR="$HOME/Steam/steamapps/common/EnshroudedServer"
+STEAM_APP_ID=2278520
+
 function install_deps {
+    sudo dpkg --add-architecture i386
     sudo apt-get update -y
-
-    # Install base dependencies
-
     sudo apt-get install -y -qq --no-install-recommends \
       build-essential \
-      htop \
-      net-tools \
-      nano \
-      gcc \
-      g++ \
-      gdb \
-      netcat-traditional \
+      ca-certificates \
       cron \
-      tzdata \
-      xvfb \
+      curl \
       dbus \
-      tmux \
-      libglib2.0-0 \
-      libpulse0 \
+      dos2unix \
+      g++ \
+      gcc \
+      gdb \
+      gnupg \
+      gosu \
+      htop \
+      jq \
+      libasound2-dev \
       libdbus-1-3 \
       libfontconfig1 \
       libfreetype6 \
-      libxext6 \
-      libxfixes3 \
-      libxi6 \
-      libxrandr2 \
-      libxrender1 \
+      libglib2.0-0 \
+      libnss3 \
+      libpulse0 \
+      libx11-xcb1 \
       libxcb1 \
-      libxcb-xfixes0 \
       libxcb-render0 \
+      libxcb-xfixes0 \
       libxcomposite1 \
       libxcursor1 \
       libxdamage1 \
+      libxext6 \
+      libxfixes3 \
+      libxi6 \
       libxinerama1 \
-      libnss3 \
-      libasound2-dev \
-      libx11-xcb1 \
-      x11-xserver-utils \
+      libxrandr2 \
+      libxrender1 \
+      locales \
+      nano \
+      net-tools \
+      netcat-traditional \
+      steamcmd \
+      sudo \
+      tmux \
+      tzdata \
+      unzip \
+      wget \
       x11-utils \
-      xauth && \
+      x11-xserver-utils \
+      xauth \
+      xvfb \
+      zip
 
-    # Install steam dependencies
+    # Clean up
+    sudo rm -rf /var/lib/apt/lists/*
+}
 
-    apt-get install -y --no-install-recommends \
-        ca-certificates \
-        locales \
-        steamcmd \
-        jq \
-        curl \
-        wget \
-        zip \
-        unzip \
-        sudo \
-        gosu \
-        dos2unix
+function install_wine {
+    local keyring=/etc/apt/keyrings/winehq-archive.gpg
 
-    rm -rf /var/lib/apt/lists/*
+    wget -O /tmp/winehq.key https://dl.winehq.org/wine-builds/winehq.key
+    sudo mkdir -p /etc/apt/keyrings
+    gpg --dearmor < /tmp/winehq.key > /tmp/winehq.gpg
+    sudo install -Dm644 /tmp/winehq.gpg "${keyring}"
 
+    echo "deb [arch=amd64,i386 signed-by=${keyring}] https://dl.winehq.org/wine-builds/ubuntu/ noble main" | sudo tee /etc/apt/sources.list.d/winehq.list > /dev/null
+
+    sudo apt-get update -y
+    sudo apt-get install -y --install-recommends winehq-stable winbind cabextract
+
+    sudo rm -rf /var/lib/apt/lists/*
+    sudo rm -f /tmp/winehq.key /tmp/winehq.gpg
+}
+
+function configure_steam() {
     # Set up SteamCMD symlinks
     mkdir -p "$HOME/.steam"
-    ln -s "$HOME/.local/share/Steam/steamcmd/linux32" "$HOME/.steam/sdk32"
-    ln -s "$HOME/.local/share/Steam/steamcmd/linux64" "$HOME/.steam/sdk64"
+    ln -sfn "$HOME/.local/share/Steam/steamcmd/linux32" "$HOME/.steam/sdk32"
+    ln -sfn "$HOME/.local/share/Steam/steamcmd/linux64" "$HOME/.steam/sdk64"
 
-    ln -s "$HOME/.steam/sdk32/steamclient.so" "$HOME/.steam/sdk32/steamservice.so"
-    ln -s "$HOME/.steam/sdk64/steamclient.so" "$HOME/.steam/sdk64/steamservice.so"
-
-
-
-    # Clean up
-    rm -rf /var/lib/apt/lists/*
-
-    # Download Wine repository key
-    wget -O /tmp/winehq.key https://dl.winehq.org/wine-builds/winehq.key
-
-    # Add i386 architecture and update package lists
-    dpkg --add-architecture i386
-    apt-get update
-
-    # Install required packages for repository management
-    apt-get install -y software-properties-common gnupg2
-
-    # Add Wine repository key
-    apt-key add /tmp/winehq.key
-
-    # Add Wine repository
-    apt-add-repository "deb https://dl.winehq.org/wine-builds/ubuntu/ bionic main"
-
-    # Install Wine and related packages
-    apt-get install -y --install-recommends winehq-stable winbind cabextract
-
-    # Clean up
-    rm -rf /var/lib/apt/lists/*
-    rm -f /tmp/winehq.key
+    ln -sfn "$HOME/.steam/sdk32/steamclient.so" "$HOME/.steam/sdk32/steamservice.so"
+    ln -sfn "$HOME/.steam/sdk64/steamclient.so" "$HOME/.steam/sdk64/steamservice.so"
 }
 
-
-function check_deps() {
-
+function print_env() {
+    echo "Environment Variables:"
+    echo "HOME: ${HOME}"
+    echo "USER: ${USER}"
 }
 
-# Install
 function install {
+    print_env
     install_deps
-
+    install_wine
+    configure_steam
+    mkdir -p "${SERVER_DIR}"
+    steamcmd +force_install_dir "${SERVER_DIR}" +login anonymous +app_update "${STEAM_APP_ID}" +quit
 }
 
+function update {
+    mkdir -p "${SERVER_DIR}"
+    steamcmd +force_install_dir "${SERVER_DIR}" +login anonymous +app_update "${STEAM_APP_ID}" validate +quit
+}
 
-# Monitor
+function start {
+    if [ ! -d "${SERVER_DIR}" ]; then
+        echo "Server directory ${SERVER_DIR} not found. Run install first."
+        return 1
+    fi
 
-# Update
+    if tmux has-session -t enshrouded 2>/dev/null; then
+        echo "Enshrouded server is already running."
+        return 0
+    fi
 
-# Backup full/gamesaves
+    tmux new-session -d -s enshrouded "cd \"${SERVER_DIR}\" && wine enshrouded_server.exe"
+}
 
-# Console
+function stop {
+    tmux kill-session -t enshrouded 2>/dev/null || true
+}
 
-# Start
+function console {
+    if tmux has-session -t enshrouded 2>/dev/null; then
+        tmux attach -t enshrouded
+    else
+        echo "No running enshrouded tmux session found."
+        return 1
+    fi
+}
 
-# Stop
+if [ $# -eq 0 ]; then
+    echo "Usage: $0 {install|start|stop|update|console}"
+    exit 1
+fi
 
-# Restart
-
-# Main block
+case "$1" in
+    install)
+        install
+        ;;
+    start)
+        start
+        ;;
+    stop)
+        stop
+        ;;
+    update)
+        update
+        ;;
+    console)
+        console
+        ;;
+    *)
+        echo "Invalid option: $1"
+        echo "Usage: $0 {install|start|stop|update|console}"
+        exit 1
+        ;;
+esac
